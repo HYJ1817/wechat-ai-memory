@@ -113,9 +113,18 @@ def capture_account_key(
     except ImportError as exc:
         raise SourceError('WeChat access requires the optional "frida" package') from exc
 
-    target = account_dir / "db_storage" / "message" / "message_0.db"
-    if not target.is_file():
-        raise SourceError(f"Cannot find the WeChat message database: {target}")
+    # WeChat numbers its message databases message_<n>.db, and the index is not
+    # always 0: WeChat 4.1.x starts at message_1.db. Pick the first numbered
+    # database that actually exists instead of assuming message_0.db.
+    message_dir = account_dir / "db_storage" / "message"
+    candidates = sorted(
+        path
+        for path in message_dir.glob("message_*.db")
+        if path.stem.removeprefix("message_").isdigit()
+    )
+    if not candidates:
+        raise SourceError(f"Cannot find a WeChat message database under {message_dir}")
+    target = candidates[0]
     with target.open("rb") as stream:
         first_page = stream.read(PAGE_SIZE)
 
