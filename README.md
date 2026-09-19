@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ikevss/wechat-ai-memory/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.3.7--alpha-07a85b?style=flat-square"></a>
+  <a href="https://github.com/HYJ1817/wechat-ai-memory/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.3.7--alpha-07a85b?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-2563eb?style=flat-square">
-  <a href="https://github.com/ikevss/wechat-ai-memory/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/ikevss/wechat-ai-memory/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/HYJ1817/wechat-ai-memory/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/HYJ1817/wechat-ai-memory/actions/workflows/test.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-17211c?style=flat-square"></a>
   <img alt="Privacy" src="https://img.shields.io/badge/privacy-local--only-f6b73c?style=flat-square">
 </p>
@@ -64,9 +64,7 @@
 ### Windows 软件包
 
 > [!IMPORTANT]
-> 上游 Release 页面目前不可访问，仓库中也没有任何 tag 或 Release，因此**预编译包无法下载**。请按后文「从源码运行」自行构建，`scripts/build_windows.ps1` 会产出下面这两个同名文件。
-
-从 Release 页面选择一种方式（当前不可用，见上）：
+从[本仓库 Release 页面](https://github.com/HYJ1817/wechat-ai-memory/releases)选择一种方式：
 
 | 下载文件 | 使用方式 | 适合场景 |
 | --- | --- | --- |
@@ -123,7 +121,7 @@
 需要 Python 3.11 或更高版本：
 
 ```powershell
-git clone https://github.com/ikevss/wechat-ai-memory.git
+git clone https://github.com/HYJ1817/wechat-ai-memory.git
 cd wechat-ai-memory
 py -3 -m venv .venv-gui
 .\.venv-gui\Scripts\python.exe -m pip install -e ".[gui,dev]"
