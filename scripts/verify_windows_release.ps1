@@ -68,6 +68,12 @@ $Hashes = @($Archive, $PublishedPortable) | ForEach-Object {
     $Hash = Get-FileHash -Algorithm SHA256 -LiteralPath $_
     "{0}  {1}" -f $Hash.Hash.ToLowerInvariant(), (Split-Path -Leaf $_)
 }
-$Hashes | Set-Content -LiteralPath (Join-Path $Root "outputs\SHA256SUMS.txt") -Encoding ascii
+# Write with LF line endings (no BOM) so `sha256sum -c` works on Linux/Git Bash.
+# Set-Content defaults to CRLF on Windows, which breaks `sha256sum -c` there.
+$HashText = ($Hashes -join "`n") + "`n"
+[System.IO.File]::WriteAllBytes(
+    (Join-Path $Root "outputs\SHA256SUMS.txt"),
+    [System.Text.Encoding]::ASCII.GetBytes($HashText)
+)
 
 Write-Host "Windows release verified at version $ExpectedVersion."
