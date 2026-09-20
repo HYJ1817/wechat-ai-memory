@@ -24,28 +24,61 @@ class WeChat4Account:
         return self.account_dir / "msg" / "attach"
 
 
+# Probing a path that lives on a malfunctioning or disconnected device raises
+# OSError on Windows instead of returning False.  This is not hypothetical: a
+# cloud-drive mount (115, 阿里云盘, ...) or a dropped network share makes
+# `Path.is_dir()` raise `[WinError 31] A device attached to the system is not
+# functioning`, which would abort account discovery and crash the app on
+# startup.  Every filesystem probe below therefore goes through these helpers.
+
+
+def _safe_is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _safe_is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def discover_wechat4_accounts() -> list[WeChat4Account]:
     roots = _candidate_xwechat_roots()
     accounts: list[WeChat4Account] = []
     seen: set[Path] = set()
     for root in roots:
+        if not _safe_is_dir(root):
+            continue
         try:
-            if not root.is_dir():
-                continue
             children = list(root.iterdir())
         except OSError:
             continue
         for child in children:
             try:
-                if not child.is_dir() or child.name.lower() == "all_users":
+                if not _safe_is_dir(child) or child.name.lower() == "all_users":
                     continue
                 db_dir = child / "db_storage"
-                if (db_dir / "session" / "session.db").is_file() and child not in seen:
+                if _safe_is_file(db_dir / "session" / "session.db") and child not in seen:
                     accounts.append(WeChat4Account(child.resolve()))
                     seen.add(child)
             except OSError:
                 continue
-    return sorted(accounts, key=lambda account: account.account_dir.stat().st_mtime, reverse=True)
+    return sorted(
+        accounts,
+        key=lambda account: _safe_mtime(account.account_dir),
+        reverse=True,
+    )
 
 
 def select_wechat4_account(path: str | Path | None = None) -> WeChat4Account:
@@ -61,7 +94,7 @@ def select_wechat4_account(path: str | Path | None = None) -> WeChat4Account:
                 raise SourceError(f"No WeChat 4.x account found under {candidate}")
             raise SourceError("Multiple WeChat accounts found; choose the account directory")
         account = WeChat4Account(candidate)
-        if not (account.db_dir / "session" / "session.db").is_file():
+        if not _safe_is_file(account.db_dir / "session" / "session.db"):
             raise SourceError(f"Not a WeChat 4.x account directory: {candidate}")
         return account
 
@@ -78,7 +111,9 @@ def _accounts_under(root: Path) -> list[WeChat4Account]:
     except OSError:
         return matches
     for child in children:
-        if child.is_dir() and (child / "db_storage" / "session" / "session.db").is_file():
+        if _safe_is_dir(child) and _safe_is_file(
+            child / "db_storage" / "session" / "session.db"
+        ):
             matches.append(WeChat4Account(child.resolve()))
     return matches
 
@@ -104,11 +139,8 @@ def _candidate_xwechat_roots() -> list[Path]:
             except OSError:
                 continue
             for directory in top_level:
-                try:
-                    if directory.is_dir():
-                        candidates.append(directory / "xwechat_files")
-                except OSError:
-                    continue
+                if _safe_is_dir(directory):
+                    candidates.append(directory / "xwechat_files")
 
     unique: list[Path] = []
     seen: set[str] = set()
