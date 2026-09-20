@@ -29,19 +29,22 @@ def discover_wechat4_accounts() -> list[WeChat4Account]:
     accounts: list[WeChat4Account] = []
     seen: set[Path] = set()
     for root in roots:
-        if not root.is_dir():
-            continue
         try:
+            if not root.is_dir():
+                continue
             children = list(root.iterdir())
         except OSError:
             continue
         for child in children:
-            if not child.is_dir() or child.name.lower() == "all_users":
+            try:
+                if not child.is_dir() or child.name.lower() == "all_users":
+                    continue
+                db_dir = child / "db_storage"
+                if (db_dir / "session" / "session.db").is_file() and child not in seen:
+                    accounts.append(WeChat4Account(child.resolve()))
+                    seen.add(child)
+            except OSError:
                 continue
-            db_dir = child / "db_storage"
-            if (db_dir / "session" / "session.db").is_file() and child not in seen:
-                accounts.append(WeChat4Account(child.resolve()))
-                seen.add(child)
     return sorted(accounts, key=lambda account: account.account_dir.stat().st_mtime, reverse=True)
 
 
@@ -93,16 +96,19 @@ def _candidate_xwechat_roots() -> list[Path]:
     if os.name == "nt":
         for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
             drive = Path(f"{letter}:/")
-            if not drive.exists():
-                continue
-            candidates.append(drive / "xwechat_files")
             try:
+                if not drive.exists():
+                    continue
+                candidates.append(drive / "xwechat_files")
                 top_level = list(drive.iterdir())
             except OSError:
                 continue
             for directory in top_level:
-                if directory.is_dir():
-                    candidates.append(directory / "xwechat_files")
+                try:
+                    if directory.is_dir():
+                        candidates.append(directory / "xwechat_files")
+                except OSError:
+                    continue
 
     unique: list[Path] = []
     seen: set[str] = set()
