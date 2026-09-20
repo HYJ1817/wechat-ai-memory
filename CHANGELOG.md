@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.7-alpha.3
+
+### Improved
+
+- PDF 图片流改用二进制编码，减少导出耗时和文件大小。
+
 ## v0.3.7-alpha.2
 
 ### Improved
