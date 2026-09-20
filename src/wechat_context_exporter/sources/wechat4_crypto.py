@@ -18,7 +18,7 @@ from typing import Callable, Iterable
 
 from Crypto.Cipher import AES
 
-from .base import SourceError
+from .base import SourceError, newest_files, safe_is_file, safe_size
 
 
 PAGE_SIZE = 4096
@@ -42,12 +42,18 @@ class DatabaseTarget:
 def collect_database_targets(db_dir: Path, relative_paths: Iterable[str] | None = None) -> list[DatabaseTarget]:
     paths: list[Path]
     if relative_paths is None:
-        paths = sorted(db_dir.rglob("*.db"))
+        try:
+            paths = sorted(db_dir.rglob("*.db"))
+        except OSError:
+            paths = []
     else:
         paths = [db_dir / relative_path for relative_path in relative_paths]
     targets: list[DatabaseTarget] = []
     for path in paths:
-        if not path.is_file() or path.stat().st_size < PAGE_SIZE:
+        if not safe_is_file(path):
+            continue
+        size = safe_size(path)
+        if size is None or size < PAGE_SIZE:
             continue
         with path.open("rb") as stream:
             first_page = stream.read(PAGE_SIZE)
@@ -125,7 +131,8 @@ def decrypt_database(source: Path, destination: Path, encryption_key: bytes) -> 
 
 
 def _apply_encrypted_wal(wal_path: Path, destination: Path, encryption_key: bytes) -> None:
-    if not wal_path.is_file() or wal_path.stat().st_size < 32:
+    size = safe_size(wal_path)
+    if size is None or size < 32:
         return
     with wal_path.open("rb") as wal:
         header = wal.read(32)
@@ -481,11 +488,7 @@ def extract_database_keys(
 
 
 def find_v2_image_sample(attachment_dir: Path) -> Path | None:
-    candidates = sorted(
-        attachment_dir.rglob("*_t.dat"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+    candidates = newest_files(attachment_dir, "*_t.dat")
     for path in candidates[:200]:
         try:
             with path.open("rb") as stream:

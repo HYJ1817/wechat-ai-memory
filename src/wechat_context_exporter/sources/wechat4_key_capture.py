@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .base import SourceError
+from .base import SourceError, safe_is_file
 from .wechat4_crypto import PAGE_SIZE, verify_account_key
 
 
@@ -230,7 +230,7 @@ def find_wechat_executable() -> Path:
     ]
     result = subprocess.run(command, capture_output=True, text=True, errors="replace", check=False)
     path = Path(result.stdout.strip()) if result.stdout.strip() else None
-    if path and path.is_file():
+    if path and safe_is_file(path):
         return path
 
     candidates = [
@@ -240,7 +240,7 @@ def find_wechat_executable() -> Path:
     for drive in "CDEFGHIJKLMNOPQRSTUVWXYZ":
         candidates.append(Path(f"{drive}:\\Weixin\\Weixin.exe"))
     for candidate in candidates:
-        if candidate.is_file():
+        if safe_is_file(candidate):
             return candidate
     raise SourceError("Cannot find Weixin.exe. Start WeChat once, then try again.")
 

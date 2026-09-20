@@ -10,7 +10,7 @@ from pathlib import Path
 
 from Crypto.Cipher import AES
 
-from .base import SourceError
+from .base import SourceError, newest_files, safe_is_file
 
 
 V2_MAGIC = b"\x07\x08V2\x08\x07"
@@ -18,11 +18,7 @@ WXGF_MAGIC = b"wxgf"
 
 
 def derive_image_xor_key(attachment_dir: Path, sample_limit: int = 32) -> int | None:
-    candidates = sorted(
-        attachment_dir.rglob("*_t.dat"),
-        key=lambda path: path.stat().st_mtime_ns,
-        reverse=True,
-    )
+    candidates = newest_files(attachment_dir, "*_t.dat")
     votes: collections.Counter[int] = collections.Counter()
     for path in candidates[:sample_limit]:
         try:
@@ -157,13 +153,13 @@ def _wxgf_partitions(data: bytes) -> list[tuple[int, int]]:
 
 def _find_ffmpeg() -> str | None:
     configured = os.environ.get("FFMPEG_PATH")
-    if configured and Path(configured).is_file():
+    if configured and safe_is_file(Path(configured)):
         return configured
     try:
         import imageio_ffmpeg
 
         bundled = imageio_ffmpeg.get_ffmpeg_exe()
-        if bundled and Path(bundled).is_file():
+        if bundled and safe_is_file(Path(bundled)):
             return bundled
     except (ImportError, OSError, RuntimeError):
         pass
@@ -209,7 +205,7 @@ class DecryptedImageCache:
 
     def _decrypt(self, source: Path) -> Path | None:
         cached = self._cache.get(source)
-        if cached and cached.is_file():
+        if cached and safe_is_file(cached):
             return cached
         try:
             data = decrypt_v2_image(source, self.aes_key or b"", self.xor_key or 0)

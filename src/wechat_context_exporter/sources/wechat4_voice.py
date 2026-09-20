@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from ..voice import app_data_dir
+from .base import safe_is_file
 from .wechat4_crypto import DecryptedDatabaseCache
 
 
@@ -64,7 +65,7 @@ class WeChatVoiceCache:
         digest = hashlib.sha256(data).hexdigest()
         self._root.mkdir(parents=True, exist_ok=True)
         target = self._root / f"{digest}.silk"
-        if not target.is_file():
+        if not safe_is_file(target):
             temporary = target.with_suffix(".tmp")
             temporary.write_bytes(data)
             temporary.replace(target)
