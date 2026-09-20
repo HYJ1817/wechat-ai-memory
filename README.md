@@ -64,7 +64,7 @@
 ### Windows 软件包
 
 > [!IMPORTANT]
-从[本仓库 Release 页面](https://github.com/HYJ1817/wechat-ai-memory/releases)选择一种方式：
+> 从[本仓库 Release 页面](https://github.com/HYJ1817/wechat-ai-memory/releases)选择一种方式：
 
 | 下载文件 | 使用方式 | 适合场景 |
 | --- | --- | --- |
