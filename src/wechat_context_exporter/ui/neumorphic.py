@@ -260,13 +260,20 @@ def paint_inset_line(painter: QPainter, rect: QRectF, radius: float, *, width: f
 # -- widgets that are recessed by nature -----------------------------------
 
 
-def input_qss(*, radius: int = RADIUS_CONTROL, padding: str = "8px 14px") -> str:
+def input_qss(
+    *, radius: int = RADIUS_CONTROL, padding: str = "8px 14px", popup: bool = False
+) -> str:
     """Styling for the text layer only; the material is painted underneath.
 
     ``background: transparent`` is what lets :class:`SoftLineEdit` draw the
     recess first and then let Qt paint the text on top of it.
+
+    ``popup`` adds the dropdown rules through the descendant selector instead of
+    styling ``view()`` directly.  Touching ``view()`` builds the popup list as a
+    separate top-level window at construction time, and that window crashes during
+    interpreter shutdown on CI (access violation with no Python frame).
     """
-    return f"""
+    qss = f"""
         background: transparent;
         border: none;
         border-radius: {radius}px;
@@ -274,6 +281,20 @@ def input_qss(*, radius: int = RADIUS_CONTROL, padding: str = "8px 14px") -> str
         padding: {padding};
         selection-background-color: {BLURPLE.name()};
         selection-color: #ffffff;
+    """
+    if not popup:
+        return qss
+    return qss + f"""
+        QComboBox QAbstractItemView {{
+            background: {BASE.name()};
+            color: {TEXT.name()};
+            border: none;
+            border-radius: 10px;
+            padding: 4px;
+            outline: none;
+            selection-background-color: {BLURPLE.name()};
+            selection-color: #ffffff;
+        }}
     """
 
 
@@ -308,23 +329,10 @@ class SoftComboBox(QComboBox):
     def __init__(self, *args, radius: int = RADIUS_CONTROL, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._radius = radius
-        self.setStyleSheet(input_qss(radius=radius, padding="5px 10px"))
-        # Style the view in place: handing the combo's own view back to
-        # setView() makes Qt take ownership twice and crashes on destruction.
-        self.view().setStyleSheet(
-            f"""
-            QAbstractItemView {{
-                background: {BASE.name()};
-                color: {TEXT.name()};
-                border: none;
-                border-radius: 10px;
-                padding: 4px;
-                outline: none;
-                selection-background-color: {BLURPLE.name()};
-                selection-color: #ffffff;
-            }}
-            """
-        )
+        # Popup styling goes through the stylesheet selector: calling view()
+        # here would build a top-level popup window that outlives the app and
+        # crashes at shutdown.
+        self.setStyleSheet(input_qss(radius=radius, padding="5px 10px", popup=True))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)

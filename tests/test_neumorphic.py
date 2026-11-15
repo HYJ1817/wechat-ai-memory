@@ -121,8 +121,13 @@ def test_soft_inputs_paint_without_a_border(app):
     assert "border: none" in field.styleSheet()
 
 
-def test_soft_combo_styles_its_view_in_place(app):
+def test_soft_combo_styles_its_popup_without_building_it(app):
     combo = nm.SoftComboBox()
     combo.addItems(["a", "b"])
-    assert combo.view() is not None
+
+    # The popup is styled through a descendant selector; calling view() here
+    # would create the very top-level window the styling avoids.
+    sheet = combo.styleSheet()
+    assert "QComboBox QAbstractItemView" in sheet
+    assert "selection-background-color" in sheet
     assert combo.count() == 2
