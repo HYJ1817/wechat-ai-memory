@@ -24,31 +24,22 @@ jobs:
         run: |
           python -m venv .venv-gui
           .\.venv-gui\Scripts\python.exe -m pip install -e ".[gui,build,dev]"
-      - name: Per-file exit codes
+      - name: test_ui verbose
+        continue-on-error: true
         shell: pwsh
         run: |
-          Get-ChildItem tests -Filter "test_*.py" | ForEach-Object {
-            .\.venv-gui\Scripts\python.exe -m pytest $_.FullName -q
-            Write-Host "EXITCODE=$LASTEXITCODE FILE=$($_.Name)"
-          }
-      - name: Full run exit code
+          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest tests/test_ui.py -v -p no:cacheprovider
+          Write-Host "EXITCODE=$LASTEXITCODE UIVERBOSE"
+      - name: export case only
+        continue-on-error: true
         shell: pwsh
         run: |
-          .\.venv-gui\Scripts\python.exe -m pytest -q
-          Write-Host "EXITCODE=$LASTEXITCODE FULL"
-      - name: test_ui verbose with faulthandler
+          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest "tests/test_ui.py::test_gui_loads_json_and_exports_the_visible_search_results" -v -p no:cacheprovider
+          Write-Host "EXITCODE=$LASTEXITCODE UIEXPORTONLY"
+      - name: other ui cases only
+        continue-on-error: true
         shell: pwsh
         run: |
-          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest tests/test_ui.py -v
-          Write-Host "EXITCODE=$LASTEXITCODE UI"
-      - name: test_ui single export case
-        shell: pwsh
-        run: |
-          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest "tests/test_ui.py::test_gui_loads_json_and_exports_the_visible_search_results" -v
-          Write-Host "EXITCODE=$LASTEXITCODE UIEXPORT"
-      - name: Full run with faulthandler
-        shell: pwsh
-        run: |
-          $env:PYTHONFAULTHANDLER = "1"
-          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest -q
-          Write-Host "EXITCODE=$LASTEXITCODE FULLFAULT"
+          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest tests/test_ui.py -v -p no:cacheprovider `
+            --deselect "tests/test_ui.py::test_gui_loads_json_and_exports_the_visible_search_results"
+          Write-Host "EXITCODE=$LASTEXITCODE UINONEXPORT"
