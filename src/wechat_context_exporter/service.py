@@ -65,9 +65,8 @@ class ExportService:
         progress: ProgressCallback | None = None,
     ) -> ExportResult:
         self._validate_options(options)
-        conversation = self._find_conversation(source, options.conversation_id)
-        messages = source.get_messages(options.conversation_id, options.start, options.end)
-        messages = self._filter_messages(messages, options.query)
+        conversation = find_conversation(source, options.conversation_id)
+        messages = select_messages(source, options)
         self._progress(progress, 1, 5, "Rendering chat pages")
         chat_pages = self.chat_renderer.render(conversation, messages, options.start, options.end)
 
@@ -157,19 +156,6 @@ class ExportService:
             raise ValueError("Rendered pages directory must be different from output file paths")
 
     @staticmethod
-    def _filter_messages(messages: list[Message], query: str | None) -> list[Message]:
-        normalized = (query or "").strip().casefold()
-        if not normalized:
-            return messages
-        return [
-            message
-            for message in messages
-            if normalized in message.sender.casefold()
-            or normalized in message.content.casefold()
-            or normalized in message.type.value.casefold()
-        ]
-
-    @staticmethod
     def _materialize_attachments(messages: list[Message], options: ExportOptions) -> list[Message]:
         if options.markdown_path is None and options.json_path is None:
             return messages
@@ -233,13 +219,38 @@ class ExportService:
         return relative
 
     @staticmethod
-    def _find_conversation(source: ChatSource, conversation_id: str) -> Conversation:
-        for conversation in source.list_conversations():
-            if conversation.id == conversation_id:
-                return conversation
-        raise ValueError(f"Conversation not found: {conversation_id}")
-
-    @staticmethod
     def _progress(callback: ProgressCallback | None, current: int, total: int, label: str) -> None:
         if callback:
             callback(current, total, label)
+
+
+def filter_messages(messages: list[Message], query: str | None) -> list[Message]:
+    """Keep messages whose sender, content, or type contains ``query``.
+
+    Module-level so the pipeline can describe the selection (count, head, tail)
+    using the same rule the renderer applies, instead of re-implementing it.
+    """
+    normalized = (query or "").strip().casefold()
+    if not normalized:
+        return messages
+    return [
+        message
+        for message in messages
+        if normalized in message.sender.casefold()
+        or normalized in message.content.casefold()
+        or normalized in message.type.value.casefold()
+    ]
+
+
+def select_messages(source: ChatSource, options: ExportOptions) -> list[Message]:
+    """The exact message set an export of ``options`` will contain."""
+    messages = source.get_messages(options.conversation_id, options.start, options.end)
+    return filter_messages(messages, options.query)
+
+
+def find_conversation(source: ChatSource, conversation_id: str) -> Conversation:
+    """Look up a conversation, or fail with the id the caller asked for."""
+    for conversation in source.list_conversations():
+        if conversation.id == conversation_id:
+            return conversation
+    raise ValueError(f"Conversation not found: {conversation_id}")

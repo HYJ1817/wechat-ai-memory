@@ -1,5 +1,31 @@
 # Changelog
 
+## 未发布
+
+### Added
+
+- 新拟物界面：现代面板改为单一基底色 `#e0e5ec` + 左上光源，元素与页面同色，凸起/凹陷只由阴影表达。新增 `ui/neumorphic.py`（令牌、凸起/凹陷绘制、`SoftLineEdit`/`SoftComboBox`/`SoftDateEdit`）与 `docs/neumorphic-ui.md`。
+- 卡片、按钮、开关、输入框、会话行、消息气泡统一换材质；窗口强制浅色（深色背景没有可用光，`system_is_dark()` 恒为 False）。
+- 每次导出记录为一个任务：`manifest.json` 保存来源指纹、时间窗、消息数、首尾消息引用和产物 `sha256`，`state.json` 记录投递结果。任务先写入 `.staging`，全部产物落盘后一次性提交到 `Ready/`。
+- 场景（scene）：内置「群聊总结」「项目决策复盘」「待办与承诺」「需求变更追溯」四个配方，自带时间窗、输出格式和提示词；自定义场景写在 `scenes.json`，同 id 覆盖内置。
+- 投递（delivery）：文件夹、Obsidian vault、剪贴板、正在运行的 Agent 四种目标。任何目标失败都回落到剪贴板，状态记为 `copied`。
+- 提示词统一带范围头（归档路径、会话、时间窗、消息数、任务号）和引用规范（按 `[消息ID]` 标注出处）。
+- CLI：`--scene`、`--list-scenes`、`--deliver`、`--deliver-to`、`--agent`、`--record`、`--jobs-dir`、`--list-jobs`、`--prune-jobs`。
+- GUI：两个窗口的导出区新增「场景 / 投递」控件；导出完成后显示任务号与投递结果。
+- 文档：`docs/jobs-and-delivery.md`。
+
+### Improved
+
+- 产出统一到 `C:\微信记忆`：GUI 默认导出路径与「投递到文件夹」的默认目标都走 `paths.output_root()`，可用 `WECHAT_AI_MEMORY_OUTPUT_DIR` 覆盖；不再散落在 `Documents` 或当前工作目录。
+- 未投递（`ready`）的任务不参与历史清理，避免误删用户唯一的归档副本。
+- 中断的任务在下次运行前自动移入 `Failed`，不再伪装成进行中的任务。
+- 筛选结果为 0 条时，CLI 明确提示时间窗可能选错，而不是安静地生成一份空归档。
+- 玻璃材质组件（`glass_widgets.py`）保留类名以兼容既有布局，只重写材质；删除仅服务于旧阴影的 PIL 模糊缓存与失效的 `_input_style`/`_combo_style`。
+
+### Fixed
+
+- `tests/conftest.py` 的 QSettings 隔离不再要求「必须有 UI 模块被导入」，单独运行 CLI 或服务层测试不会再全部报错。
+
 ## v0.3.7-alpha.3
 
 ### Improved
