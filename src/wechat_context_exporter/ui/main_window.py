@@ -47,8 +47,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..delivery import DeliveryError, DeliveryTarget
+from ..jobs import JobStore, default_jobs_dir
 from ..models import Message, MessageType
+from ..paths import default_export_path
+from ..pipeline import RunResult, mirror_export, run_export
 from ..rendering.fonts import FontBook
+from ..scenes import Scene
 from ..service import ExportOptions, ExportResult, ExportService
 from ..voice import VoiceTranscriber
 from ..sources import (
@@ -58,6 +63,7 @@ from ..sources import (
     discover_wechat4_accounts,
 )
 from ..sources.wechat4_crypto import extract_image_key
+from .scene_delivery import SceneDeliveryBar, resolve_scene_range
 
 APP_NAME = "微信 AI 记忆库"
 APP_ID = "LocalTools.WeChatAIMemory"
@@ -164,22 +170,48 @@ class VoiceTranscriptionWorker(QThread):
 
 
 class ExportWorker(QThread):
+    """One export, off the UI thread, optionally recorded and delivered.
+
+    ``completed`` still carries an :class:`ExportResult` so existing handlers keep
+    working; the job record, rendered prompt, and delivery outcome are available
+    afterwards as :attr:`run_result`.
+    """
+
     progress = Signal(int, int, str)
     completed = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, source: ChatSource, options: ExportOptions) -> None:
+    def __init__(
+        self,
+        source: ChatSource,
+        options: ExportOptions,
+        *,
+        store: JobStore | None = None,
+        scene: Scene | None = None,
+        target: DeliveryTarget | None = None,
+    ) -> None:
         super().__init__()
         self.source = source
         self.options = options
+        self.store = store
+        self.scene = scene
+        self.target = target
+        self.run_result: RunResult | None = None
 
     def run(self) -> None:
         try:
-            result = ExportService().export(self.source, self.options, self.progress.emit)
+            self.run_result = run_export(
+                self.source,
+                self.options,
+                store=self.store,
+                scene=self.scene,
+                target=self.target,
+                progress=self.progress.emit,
+            )
         except Exception as exc:  # Qt worker boundary.
             self.failed.emit(str(exc))
             return
-        self.completed.emit(result)
+        self.completed.emit(self.run_result.export)
 
 
 def _section_label(text: str, number: str) -> QWidget:
@@ -420,6 +452,7 @@ class MainWindow(QMainWindow):
         self._image_worker: ImageKeyWorker | None = None
         self._voice_worker: VoiceTranscriptionWorker | None = None
         self._export_worker: ExportWorker | None = None
+        self._export_output: Path | None = None
         self._last_result: ExportResult | None = None
         self._image_reading_enabled = False
         self._closing = False
@@ -660,6 +693,9 @@ class MainWindow(QMainWindow):
         sidebar_actions_layout = QVBoxLayout(sidebar_actions)
         sidebar_actions_layout.setContentsMargins(22, 8, 22, 10)
         sidebar_actions_layout.setSpacing(5)
+        self.scene_bar = SceneDeliveryBar()
+        self.scene_bar.scene_changed.connect(self._apply_scene_to_controls)
+        sidebar_actions_layout.addWidget(self.scene_bar)
         sidebar_actions_layout.addWidget(self.open_folder_button)
         sidebar_actions_layout.addWidget(self.export_button)
         sidebar_layout.addWidget(sidebar_actions)
@@ -1082,9 +1118,9 @@ class MainWindow(QMainWindow):
             character if character.isalnum() or character in "-_" else "_"
             for character in self.conversation_combo.currentText()
         )
-        output_dir = Path.cwd() / "outputs"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        self.output_edit.setText(str(output_dir / f"{safe_name}_memory.pdf"))
+        # One archive root for every window; the working directory is not a place
+        # a user looks for their chat history.
+        self.output_edit.setText(str(default_export_path(f"{safe_name}_memory")))
 
     def _browse_output(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "导出 PDF", self.output_edit.text(), "PDF files (*.pdf)")
@@ -1095,6 +1131,12 @@ class MainWindow(QMainWindow):
         if not self._source or self.conversation_combo.currentIndex() < 0:
             QMessageBox.information(self, "尚未选择会话", "请先连接数据并选择会话。")
             return
+        try:
+            target = self.scene_bar.build_target()
+        except DeliveryError as exc:
+            QMessageBox.warning(self, "投递设置不完整", str(exc))
+            return
+        scene = self.scene_bar.selected_scene()
         output_text = self.output_edit.text().strip()
         if not output_text:
             self._browse_output()
@@ -1102,7 +1144,7 @@ class MainWindow(QMainWindow):
             if not output_text:
                 return
         output = Path(output_text).expanduser().resolve()
-        start, end = self._selected_range()
+        start, end = resolve_scene_range(scene, *self._selected_range())
         options = ExportOptions(
             conversation_id=str(self.conversation_combo.currentData()),
             output_pdf=output,
@@ -1112,15 +1154,33 @@ class MainWindow(QMainWindow):
             pages_dir=output.with_name(f"{output.stem}_pages") if self.keep_pages_check.isChecked() else None,
             markdown_path=output.with_suffix(".md") if self.companions_check.isChecked() else None,
             json_path=output.with_suffix(".json") if self.companions_check.isChecked() else None,
-            query=self.search_edit.text().strip() or None,
+            query=self.search_edit.text().strip() or (scene.query if scene else None),
         )
         self._settings.setValue("outputPath", str(output))
+        self._export_output = output
         self._set_busy(True)
-        self._export_worker = ExportWorker(self._source, options)
+        self._export_worker = ExportWorker(
+            self._source,
+            options,
+            store=JobStore(default_jobs_dir()),
+            scene=scene,
+            target=target,
+        )
         self._export_worker.progress.connect(self._operation_progress)
         self._export_worker.completed.connect(self._export_completed)
         self._export_worker.failed.connect(self._export_failed)
         self._export_worker.start()
+
+    def _apply_scene_to_controls(self, scene: Scene | None) -> None:
+        """Mirror a scene's output choices into the checkboxes.
+
+        The scene decides what the pipeline writes, so showing it here keeps the
+        window from implying a Markdown file the archive will not contain.
+        """
+        if scene is None:
+            return
+        self.image_pages_check.setChecked(scene.include_image_pages)
+        self.companions_check.setChecked(scene.markdown or scene.json_output)
 
     def _operation_progress(self, current: int, total: int, label: str) -> None:
         self.progress.setRange(0, total)
@@ -1128,12 +1188,21 @@ class MainWindow(QMainWindow):
         self.status_label.setText(label)
 
     def _export_completed(self, result: ExportResult) -> None:
-        self._last_result = result
+        run = self._export_worker.run_result if self._export_worker is not None else None
+        mirrored = mirror_export(result, self._export_output) if self._export_output else result
+        self._last_result = mirrored
+        final_path = mirrored.pdf_path
         self._set_busy(False)
         self.progress.setValue(self.progress.maximum())
         self.status_label.setText(f"{result.page_count} 页 · {result.message_count} 条消息")
         self.open_folder_button.setEnabled(True)
-        QMessageBox.information(self, "导出完成", f"已生成：\n{result.pdf_path}")
+
+        summary = f"已生成：\n{final_path}"
+        if run is not None and run.job is not None:
+            summary += f"\n\n任务 {run.job.job_id}"
+            if run.delivery is not None:
+                summary += f"\n{run.delivery.describe()}"
+        QMessageBox.information(self, "导出完成", summary)
 
     def _export_failed(self, error: str) -> None:
         self._set_busy(False)
@@ -1155,6 +1224,7 @@ class MainWindow(QMainWindow):
             not busy and self._source is not None and self.conversation_combo.currentIndex() >= 0
         )
         self.image_key_button.setEnabled(not busy and isinstance(self._source, WeChat4LocalSource))
+        self.scene_bar.setEnabled(not busy)
         self.voice_button.setEnabled(
             not busy
             and any(
