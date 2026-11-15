@@ -36,6 +36,16 @@ jobs:
         run: |
           .\.venv-gui\Scripts\python.exe -m pytest -q
           Write-Host "EXITCODE=$LASTEXITCODE FULL"
+      - name: test_ui verbose with faulthandler
+        shell: pwsh
+        run: |
+          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest tests/test_ui.py -v
+          Write-Host "EXITCODE=$LASTEXITCODE UI"
+      - name: test_ui single export case
+        shell: pwsh
+        run: |
+          .\.venv-gui\Scripts\python.exe -X faulthandler -m pytest "tests/test_ui.py::test_gui_loads_json_and_exports_the_visible_search_results" -v
+          Write-Host "EXITCODE=$LASTEXITCODE UIEXPORT"
       - name: Full run with faulthandler
         shell: pwsh
         run: |
