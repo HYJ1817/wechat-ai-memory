@@ -64,7 +64,10 @@ def run_smoke(
 
     desktop = Desktop(backend="uia")
     existing_windows = {item.handle for item in desktop.windows()}
-    command = [str(executable)] + (["--classic"] if classic else [])
+    # pywinauto hands the command line straight to CreateProcess, which wants a
+    # string; a list raises "Objects of type 'list' can not be converted to
+    # Unicode". Quote the path so a directory with spaces still launches.
+    command = f'"{executable}"' + (" --classic" if classic else "")
     app = Application(backend="uia").start(command, work_dir=str(output.parent))
     window = None
     window_handle = None
