@@ -74,14 +74,14 @@ if ($LASTEXITCODE -ne 0) { throw "Directory package GUI smoke test failed." }
     --exe $PortableExe `
     --fixture $Fixture `
     --output (Join-Path $SmokeRoot "portable\default.pdf") `
-    --startup-only
+    --startup-only --window-timeout 120
 if ($LASTEXITCODE -ne 0) { throw "Portable package did not open the default window." }
 
 & $Python scripts\package_gui_smoke.py `
     --exe $PortableExe `
     --fixture $Fixture `
     --output (Join-Path $SmokeRoot "portable\filtered.pdf") `
-    --classic
+    --classic --window-timeout 120
 if ($LASTEXITCODE -ne 0) { throw "Portable package GUI smoke test failed." }
 
 $Hashes = @($Archive, $PublishedPortable) | ForEach-Object {

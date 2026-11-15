@@ -54,6 +54,7 @@ def run_smoke(
     *,
     classic: bool = False,
     startup_only: bool = False,
+    window_timeout: float = 60.0,
 ) -> dict[str, object]:
     executable = executable.resolve(strict=True)
     fixture = fixture.resolve(strict=True)
@@ -72,22 +73,22 @@ def run_smoke(
     window = None
     window_handle = None
     try:
-        process_id = app.process
-
         def find_main_window() -> bool:
             nonlocal window_handle
             for item in desktop.windows():
                 if item.handle in existing_windows:
                     continue
-                # Match by process rather than by Qt's automation id: the default
-                # window is the modern dashboard now, whose class name (and so its
-                # automation id) differs from the classic window's.
-                if item.process_id() == process_id and item.is_visible():
+                # Any new top-level window is ours: the runner is otherwise idle,
+                # and the portable build is a onefile bootloader whose real window
+                # belongs to a child process, so matching the started pid would
+                # never find it. Qt's automation id is no good either -- the
+                # default dashboard's class differs from the classic window's.
+                if item.is_visible():
                     window_handle = item.handle
                     return True
             return False
 
-        _wait_for(find_main_window, "new application window", timeout=45)
+        _wait_for(find_main_window, "new application window", timeout=window_timeout)
         assert window_handle is not None
         attached_app = Application(backend="uia").connect(handle=window_handle)
         window = attached_app.window(handle=window_handle)
@@ -202,6 +203,12 @@ def main() -> int:
         action="store_true",
         help="Only verify that the window appears; skip driving the export flow",
     )
+    parser.add_argument(
+        "--window-timeout",
+        type=float,
+        default=60.0,
+        help="Seconds to wait for the window (onefile builds extract first)",
+    )
     args = parser.parse_args()
     print(
         json.dumps(
@@ -211,6 +218,7 @@ def main() -> int:
                 args.output,
                 classic=args.classic,
                 startup_only=args.startup_only,
+                window_timeout=args.window_timeout,
             ),
             ensure_ascii=True,
         )
