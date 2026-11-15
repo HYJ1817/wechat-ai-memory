@@ -47,7 +47,14 @@ def _control_by_id_suffix(window, suffix: str, control_type: str):
     return matches[0]
 
 
-def run_smoke(executable: Path, fixture: Path, output: Path) -> dict[str, object]:
+def run_smoke(
+    executable: Path,
+    fixture: Path,
+    output: Path,
+    *,
+    classic: bool = False,
+    startup_only: bool = False,
+) -> dict[str, object]:
     executable = executable.resolve(strict=True)
     fixture = fixture.resolve(strict=True)
     output = output.resolve()
@@ -57,16 +64,22 @@ def run_smoke(executable: Path, fixture: Path, output: Path) -> dict[str, object
 
     desktop = Desktop(backend="uia")
     existing_windows = {item.handle for item in desktop.windows()}
-    app = Application(backend="uia").start(str(executable), work_dir=str(output.parent))
+    command = [str(executable)] + (["--classic"] if classic else [])
+    app = Application(backend="uia").start(command, work_dir=str(output.parent))
     window = None
     window_handle = None
     try:
+        process_id = app.process
+
         def find_main_window() -> bool:
             nonlocal window_handle
             for item in desktop.windows():
                 if item.handle in existing_windows:
                     continue
-                if item.element_info.automation_id == "QApplication.MainWindow" and item.is_visible():
+                # Match by process rather than by Qt's automation id: the default
+                # window is the modern dashboard now, whose class name (and so its
+                # automation id) differs from the classic window's.
+                if item.process_id() == process_id and item.is_visible():
                     window_handle = item.handle
                     return True
             return False
@@ -76,6 +89,13 @@ def run_smoke(executable: Path, fixture: Path, output: Path) -> dict[str, object
         attached_app = Application(backend="uia").connect(handle=window_handle)
         window = attached_app.window(handle=window_handle)
         window.wait("visible ready", timeout=15)
+
+        if startup_only:
+            return {
+                "executable": executable.name,
+                "window_title": window.window_text(),
+                "classic": classic,
+            }
 
         source_combo = sorted(
             window.descendants(control_type="ComboBox"),
@@ -169,8 +189,29 @@ def main() -> int:
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--classic",
+        action="store_true",
+        help="Launch the classic window instead of the default modern dashboard",
+    )
+    parser.add_argument(
+        "--startup-only",
+        action="store_true",
+        help="Only verify that the window appears; skip driving the export flow",
+    )
     args = parser.parse_args()
-    print(json.dumps(run_smoke(args.exe, args.fixture, args.output), ensure_ascii=True))
+    print(
+        json.dumps(
+            run_smoke(
+                args.exe,
+                args.fixture,
+                args.output,
+                classic=args.classic,
+                startup_only=args.startup_only,
+            ),
+            ensure_ascii=True,
+        )
+    )
     return 0
 
 

@@ -52,16 +52,36 @@ if (-not $BundledVad) {
 }
 
 New-Item -ItemType Directory -Path $SmokeRoot -Force | Out-Null
+
+# A bare launch opens the modern dashboard, so that path is checked first; the
+# export flow below is driven through the classic window (--classic), whose
+# controls the smoke script knows by name. Both windows ship in the package.
 & $Python scripts\package_gui_smoke.py `
     --exe $DirectoryExe `
     --fixture $Fixture `
-    --output (Join-Path $SmokeRoot "directory\filtered.pdf")
+    --output (Join-Path $SmokeRoot "directory\default.pdf") `
+    --startup-only
+if ($LASTEXITCODE -ne 0) { throw "Directory package did not open the default window." }
+
+& $Python scripts\package_gui_smoke.py `
+    --exe $DirectoryExe `
+    --fixture $Fixture `
+    --output (Join-Path $SmokeRoot "directory\filtered.pdf") `
+    --classic
 if ($LASTEXITCODE -ne 0) { throw "Directory package GUI smoke test failed." }
 
 & $Python scripts\package_gui_smoke.py `
     --exe $PortableExe `
     --fixture $Fixture `
-    --output (Join-Path $SmokeRoot "portable\filtered.pdf")
+    --output (Join-Path $SmokeRoot "portable\default.pdf") `
+    --startup-only
+if ($LASTEXITCODE -ne 0) { throw "Portable package did not open the default window." }
+
+& $Python scripts\package_gui_smoke.py `
+    --exe $PortableExe `
+    --fixture $Fixture `
+    --output (Join-Path $SmokeRoot "portable\filtered.pdf") `
+    --classic
 if ($LASTEXITCODE -ne 0) { throw "Portable package GUI smoke test failed." }
 
 $Hashes = @($Archive, $PublishedPortable) | ForEach-Object {
