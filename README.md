@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HYJ1817/wechat-ai-memory/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.3.7--alpha.3-07a85b?style=flat-square"></a>
+  <a href="https://github.com/HYJ1817/wechat-ai-memory/releases"><img alt="Release" src="https://img.shields.io/badge/release-v0.3.8--alpha.1-07a85b?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-2563eb?style=flat-square">
   <a href="https://github.com/HYJ1817/wechat-ai-memory/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/HYJ1817/wechat-ai-memory/actions/workflows/test.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-17211c?style=flat-square"></a>
@@ -36,7 +36,7 @@
 <p align="center"><sub>连接微信 → 读取图片 → 选择记忆范围 → 关键词筛选 → 生成档案 → 查看实际 PDF。点击动画观看高清版本。</sub></p>
 
 > [!IMPORTANT]
-> 当前为 `v0.3.7-alpha.3` 私人测试版。本机微信读取已在 Windows 微信 4.x 上验证，但微信升级可能改变内部数据格式。首次使用前建议备份重要数据。
+> 当前为 `v0.3.8-alpha.1` 私人测试版。本机微信读取已在 Windows 微信 4.x 上验证，但微信升级可能改变内部数据格式。首次使用前建议备份重要数据。
 
 ## 为什么做这个项目
 
@@ -56,7 +56,10 @@
 | 图片处理 | V2/WXGF 原图恢复、EXIF 方向修正、预览图与 300 DPI 高清独立页 |
 | 语音处理 | 读取微信 SILK 音频，使用本地 faster-whisper 转写并缓存文字 |
 | 记忆输出 | PDF、Markdown、规范化 JSON，可选分页 PNG |
-| 使用方式 | PySide6 桌面界面、JSON 备用入口和命令行 |
+| 任务记录 | 每次导出是一个任务：来源、时间窗、首尾消息、产物 sha256 与投递结果；先写暂存目录，完成后原子提交 |
+| 场景 | 内置「群聊总结 / 项目决策复盘 / 待办与承诺 / 需求变更追溯」，自定义场景按 id 覆盖内置 |
+| 投递 | 文件夹、Obsidian、剪贴板、正在运行的 Agent；投递失败自动回落剪贴板，内容始终离一次 Ctrl+V 一步 |
+| 使用方式 | PySide6 桌面界面（新拟物现代面板，`--classic` 切回经典）、JSON 备用入口和命令行 |
 | 数据边界 | 无遥测、无远程 API、无聊天内容上传 |
 
 ## 下载与使用
