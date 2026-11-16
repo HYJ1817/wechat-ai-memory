@@ -38,7 +38,7 @@ from ..delivery import (
 )
 from ..paths import output_root
 from ..scenes import Scene, SceneStore
-from . import neumorphic as nm
+from . import fluent as nm
 
 TARGET_LABELS: tuple[tuple[str, str], ...] = (
     ("none", "只记录，不投递"),

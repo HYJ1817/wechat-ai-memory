@@ -34,7 +34,7 @@ from .main_window import APP_ID, APP_NAME, MainWindow, application_icon
 
 # Which UI a bare launch gets.  Flip to "classic" to make the old window the
 # default again without touching the entry scripts.
-# The modern dashboard is neumorphic now, not glass; the value is kept short
+# The modern dashboard is the WinUI-styled one now, not glass; kept short
 # because it is only ever compared against this constant.
 DEFAULT_UI = "modern"
 

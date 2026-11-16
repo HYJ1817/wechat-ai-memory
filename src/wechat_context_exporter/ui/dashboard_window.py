@@ -78,7 +78,7 @@ from ..sources import (
 from ..sources.wechat4_crypto import extract_image_key
 from ..voice import VoiceTranscriber
 from . import native_theme
-from . import neumorphic as nm
+from . import fluent as nm
 from .glass_widgets import (
     AvatarBadge,
     ChatBubbleStream,
@@ -426,7 +426,7 @@ class GlassDashboardWindow(QMainWindow):
 
         The classic window put all of its inputs in a single column and gave the
         rest of the width to the content; the export button stayed pinned at the
-        bottom. This is the same arrangement with the neumorphic material, so the
+        bottom. This is the same arrangement with the Fluent material, so the
         preview gets the width instead of a third cramped column.
         """
         card = GlassCard(self, corner_radius=24, tint=(255, 255, 255, 26))

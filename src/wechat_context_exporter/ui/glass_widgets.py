@@ -51,15 +51,13 @@ if TYPE_CHECKING:
     from ..models import Message
 
 from . import native_theme
-from . import neumorphic as nm
+from . import fluent as nm
 
 class GlassCard(QFrame):
-    """A raised neumorphic panel.
+    """A Fluent layer: white surface, 1px stroke, 8px corners.
 
-    Kept under its old name because three layouts and a handful of tests refer to
-    it; the material is what changed.  The panel is the same colour as the page --
-    the drop shadow outside its bottom-right edge and the lit rim inside its
-    top-left edge are the only things separating it from the background.
+    Kept under its old name because the layouts refer to it; Fluent separates
+    surfaces with a stroke rather than a shadow, so there is no elevation here.
     """
 
     def __init__(
@@ -108,7 +106,7 @@ class ToggleSwitch(QWidget):
         super().__init__(parent)
         self._checked = checked
         self._knob_pos = 1.0 if checked else 0.0
-        self.setFixedSize(48, 26)
+        self.setFixedSize(40, 20)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self._anim = QPropertyAnimation(self, b"knob_position", self)
@@ -158,39 +156,21 @@ class ToggleSwitch(QWidget):
         w, h = float(self.width()), float(self.height())
         radius = h / 2.0
         rect = QRectF(0, 0, w, h)
+        palette = native_theme.active()
 
-        # The track is always recessed -- the switch is a hole in the surface.
-        # Depth does not change with state; only the knob does.
-        nm.paint_recessed(painter, rect, radius, strength=125)
+        on = self._checked
+        track = palette.color("accent") if on else palette.color("surface")
+        stroke = palette.color("accent") if on else palette.color("border_strong")
+        painter.setBrush(track)
+        painter.setPen(QPen(stroke, 1.0))
+        painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
 
         t = max(0.0, min(1.0, self._knob_pos))
-        knob_radius = radius - 5.0
-        knob_y = radius
-        knob_x = radius + 1.5 + t * (w - radius * 2.0 - 3.0)
-
-        # Knob casts its own small shadow, so it must sit above the recess.
+        diameter = h - 8.0
+        x = 4.0 + t * (w - 8.0 - diameter)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(184, 188, 194, 110))
-        painter.drawEllipse(QPointF(knob_x + 1.6, knob_y + 1.6), knob_radius, knob_radius)
-
-        knob_color = nm.BLURPLE if self._checked else nm.BASE
-        painter.setBrush(knob_color)
-        painter.drawEllipse(QPointF(knob_x, knob_y), knob_radius, knob_radius)
-
-        # Lit rim on the knob's top-left edge, same light source as everything else.
-        if not self._checked:
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor(255, 255, 255, 210), 1.4))
-            painter.drawArc(
-                QRectF(
-                    knob_x - knob_radius + 1.0,
-                    knob_y - knob_radius + 1.0,
-                    (knob_radius - 1.0) * 2.0,
-                    (knob_radius - 1.0) * 2.0,
-                ),
-                90 * 16,
-                150 * 16,
-            )
+        painter.setBrush(QColor("#FFFFFF") if on else palette.color("text_faint"))
+        painter.drawEllipse(QRectF(x, 4.0, diameter, diameter))
 
 
 class StorageGauge(QWidget):
@@ -251,10 +231,6 @@ class StorageGauge(QWidget):
         cy = self.height() / 2.0 - 8.0
         r = min(cx, cy) - 14.0
         arc_rect = QRectF(cx - r, cy - r, r * 2.0, r * 2.0)
-
-        # The dial is a recess in the panel, not an object on top of it.
-        dial = arc_rect.adjusted(-13, -13, 13, 13)
-        nm.paint_recessed(painter, dial, dial.width() / 2.0, strength=85)
 
         # 1. Background Arc Track
         start_angle = 210 * 16
@@ -518,7 +494,7 @@ class PillButton(QPushButton):
         self._hovered = False
         self._held = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(34)
+        self.setFixedHeight(32)
         self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self._shadow = nm.apply_raised(
             self, offset=nm.CONTROL_OFFSET, blur=nm.CONTROL_BLUR, alpha=130
@@ -568,22 +544,35 @@ class PillButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w, h = float(self.width()), float(self.height())
-        rect = QRectF(0, 0, w, h)
-        radius = h / 2.0
+        palette = native_theme.active()
+        rect = QRectF(0, 0, float(self.width()), float(self.height()))
+        radius = nm.ROUND_CONTROL
 
         if self._primary:
-            path = nm.rounded_path(rect, radius)
-            painter.fillPath(path, nm.BLURPLE)
-            text_color = QColor(255, 255, 255)
+            fill = palette.color("accent")
+            if self._held:
+                fill = fill.darker(112)
+            elif self._hovered:
+                fill = fill.lighter(112)
+            nm.paint_surface(painter, rect, radius, fill=fill, border=fill)
+            text_color = QColor(palette.accent_text)
             font_weight = QFont.Weight.DemiBold
         elif self._active or self._held:
-            nm.paint_recessed(painter, rect, radius, strength=120)
-            text_color = nm.TEXT
+            nm.paint_surface(
+                painter,
+                rect,
+                radius,
+                fill=palette.color("pressed"),
+                border=palette.color("border_strong"),
+            )
+            text_color = palette.color("text")
             font_weight = QFont.Weight.DemiBold
         else:
-            nm.paint_surface(painter, rect, radius, highlight=235 if self._hovered else 175)
-            text_color = nm.TEXT
+            fill = palette.color("hover") if self._hovered else palette.color("surface")
+            nm.paint_surface(
+                painter, rect, radius, fill=fill, border=palette.color("border_strong")
+            )
+            text_color = palette.color("text")
             font_weight = QFont.Weight.Normal
 
         font = QFont("Microsoft YaHei", 10, font_weight)
@@ -619,24 +608,22 @@ class AvatarBadge(QWidget):
         r = min(w, h) / 2.0
         center = QPointF(w / 2.0, h / 2.0)
 
-        # An avatar is a small raised disc, not a coloured sticker: the initial
-        # carries the identity, the material carries the depth.
+        palette = native_theme.active()
         disc = QRectF(center.x() - r + 0.5, center.y() - r + 0.5, (r - 1.0) * 2.0, (r - 1.0) * 2.0)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(nm.BASE)
+
+        tint = palette.color("accent")
+        tint.setAlpha(38 if self.is_outgoing else 0)
+        painter.setPen(QPen(palette.color("border_strong"), 1.0))
+        painter.setBrush(tint if self.is_outgoing else palette.color("surface_alt"))
         painter.drawEllipse(disc)
 
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor(255, 255, 255, 225), 1.6))
-        painter.drawArc(disc.adjusted(1.0, 1.0, -1.0, -1.0), 90 * 16, 160 * 16)
-        painter.setPen(QPen(QColor(184, 188, 194, 160), 1.6))
-        painter.drawArc(disc.adjusted(1.0, 1.0, -1.0, -1.0), 270 * 16, 160 * 16)
-
-        text_color = nm.BLURPLE if self.is_outgoing else nm.TEXT
+        text_color = palette.color("accent") if self.is_outgoing else palette.color("text_muted")
 
         painter.setPen(text_color)
-        font_size = int(self.avatar_size * 0.40)
-        painter.setFont(QFont("Microsoft YaHei", font_size, QFont.Weight.Bold))
+        font = QFont("Microsoft YaHei")
+        font.setPixelSize(max(10, int(self.avatar_size * 0.40)))
+        font.setWeight(QFont.Weight.DemiBold)
+        painter.setFont(font)
 
         if self.is_group:
             char = "群"
@@ -657,7 +644,7 @@ class ChatDateDivider(QWidget):
     def __init__(self, date_text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedHeight(34)
+        self.setFixedHeight(32)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 2, 20, 2)
@@ -738,9 +725,7 @@ class SoftPanel(QFrame):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        nm.paint_recessed(
-            painter, QRectF(0, 0, self.width(), self.height()), self.radius, strength=self.strength
-        )
+        nm.paint_well(painter, QRectF(0, 0, self.width(), self.height()), self.radius)
 
 
 class SoftBubble(QFrame):
@@ -751,16 +736,28 @@ class SoftBubble(QFrame):
     side of the column and the sender label already say who is talking.
     """
 
-    def __init__(self, parent: QWidget | None = None, *, radius: float = 16.0) -> None:
+    def __init__(
+        self, parent: QWidget | None = None, *, radius: float = nm.ROUND_CARD, outgoing: bool = False
+    ) -> None:
         super().__init__(parent)
         self.radius = radius
+        self.outgoing = outgoing
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = native_theme.active()
         rect = QRectF(0, 0, self.width(), self.height())
-        nm.paint_surface(painter, rect, self.radius, highlight=185)
+        if self.outgoing:
+            tint = palette.color("accent")
+            tint.setAlpha(26)
+            nm.paint_surface(painter, rect, self.radius, fill=tint, border=QColor(0, 0, 0, 0))
+        else:
+            nm.paint_surface(
+                painter, rect, self.radius,
+                fill=palette.color("surface_alt"), border=palette.color("border"),
+            )
 
 
 class ChatMessageCard(QWidget):
@@ -827,7 +824,7 @@ class ChatMessageCard(QWidget):
         msg_col.addLayout(hdr_layout)
 
         # Bubble container
-        bubble_frame = SoftBubble()
+        bubble_frame = SoftBubble(outgoing=is_outgoing)
         bubble_frame.setObjectName("msgBubble")
 
         bubble_layout = QVBoxLayout(bubble_frame)
@@ -978,17 +975,12 @@ class ConversationItemWidget(QWidget):
 
         self.lbl_badge = QLabel(f"{count} 条" if count > 0 else "")
         self.lbl_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_badge.setStyleSheet(native_theme.themed_qss("""
-            QLabel {
-                background: rgba(109, 93, 252, 235);
-                border: none;
-                border-radius: 9px;
-                color: #ffffff;
-                font-size: 10px;
-                font-weight: bold;
-                padding: 1px 6px;
-            }
-        """))
+        palette = native_theme.active()
+        self.lbl_badge.setStyleSheet(
+            "QLabel { background: %s; border: none; border-radius: 9px; color: %s;"
+            " font-size: 10px; font-weight: bold; padding: 1px 6px; }"
+            % (palette.accent, palette.accent_text)
+        )
         if count == 0:
             self.lbl_badge.hide()
         right_col.addWidget(self.lbl_badge)
@@ -1019,19 +1011,19 @@ class ConversationItemWidget(QWidget):
 
         w, h = float(self.width()), float(self.height())
         rect = QRectF(2, 2, w - 4, h - 4)
-        radius = 14.0
+        palette = native_theme.active()
 
-        # Resting rows are just content on the page; depth only appears when the
-        # row is hovered (lifted) or selected (pressed into the surface).
         if self._selected:
-            nm.paint_recessed(painter, rect, radius, strength=125)
+            nm.paint_surface(
+                painter, rect, nm.ROUND_CONTROL, fill=palette.color("hover"),
+                border=QColor(0, 0, 0, 0),
+            )
+            nm.paint_accent_bar(painter, QRectF(6, (h - 20) / 2.0, 3, 20))
         elif self._hovered:
-            nm.paint_surface(painter, rect, radius, highlight=235)
-
-        if self._selected:
-            painter.setBrush(nm.BLURPLE)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QRectF(5, (h - 24) / 2.0, 3.5, 24), 2.0, 2.0)
+            nm.paint_surface(
+                painter, rect, nm.ROUND_CONTROL, fill=palette.color("surface_alt"),
+                border=QColor(0, 0, 0, 0),
+            )
 
 
 class ChatBubbleStream(QScrollArea):
