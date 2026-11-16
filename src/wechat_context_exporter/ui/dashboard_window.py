@@ -315,7 +315,7 @@ class GlassDashboardWindow(QMainWindow):
         title_box.setSpacing(10)
         title_lbl = QLabel("微信 AI 记忆库", self)
         title_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 245); font-size: 19px; font-weight: bold;"))
-        version_lbl = QLabel("v0.3.8-alpha.1", self)
+        version_lbl = QLabel("v0.3.8-alpha.2", self)
         version_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 210, 160, 160); font-size: 11px; margin-top: 5px;"))
         title_box.addWidget(title_lbl)
         title_box.addWidget(version_lbl)
