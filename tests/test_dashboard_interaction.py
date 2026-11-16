@@ -12,6 +12,7 @@ Two things are covered here that previously had no protection at all:
 
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -238,3 +239,21 @@ def test_export_options_match_the_service_dataclass(monkeypatch) -> None:
     source = inspect.getsource(GlassDashboardWindow._on_export_clicked)
     for name in required:
         assert f"{name}=" in source, f"_on_export_clicked does not pass {name}="
+
+
+def test_remembered_output_path_is_only_restored_when_usable(tmp_path) -> None:
+    """A path left behind by the test suite must not become the user's default.
+
+    pytest writes into the OS temp directory; that path survives the folder, so
+    restoring it would point the export button at somewhere that no longer exists.
+    """
+    from wechat_context_exporter.ui.dashboard_window import GlassDashboardWindow
+
+    # tmp_path itself lives under the OS temp directory, so the "usable" case
+    # has to be a real folder outside it.
+    assert GlassDashboardWindow._restorable_output(str(Path.cwd() / "keep.pdf")) is True
+
+    leftover = Path(tempfile.gettempdir()) / "pytest-of-someone" / "out.pdf"
+    assert GlassDashboardWindow._restorable_output(str(leftover)) is False
+
+    assert GlassDashboardWindow._restorable_output(str(tmp_path / "gone" / "out.pdf")) is False

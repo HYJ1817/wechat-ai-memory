@@ -59,13 +59,12 @@ def test_glass_dashboard_render() -> None:
     assert out_png.stat().st_size > 50000, f"Rendered image too small: {out_png.stat().st_size} bytes"
 
     # Assert essential widgets exist and are populated
-    assert window.left_card is not None
+    assert window.settings_card is not None
     assert window.center_card is not None
-    assert window.right_card is not None
     assert window.chat_stream is not None
     assert window.media_bar is not None
-    assert window.spotlight_card is not None
-    assert "ECO 项目讨论群" in window.spotlight_card.lbl_title.text()
+    assert window.chat_stream is not None
+    assert window.center_card.width() > window.settings_card.width()
 
     # Test animated toggle switches
     # Export options are checkboxes now (they were animated toggles)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from datetime import datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -86,7 +87,6 @@ from .glass_widgets import (
     ChatSystemMessage,
     ConversationItemWidget,
     GlassCard,
-    MemorySpotlightCard,
     PillButton,
     SoftPanel,
     StorageGauge,
@@ -682,11 +682,6 @@ class GlassDashboardWindow(QMainWindow):
 
         layout.addLayout(header)
 
-        # Memory Spotlight Card (Twilight Villa Artwork & Recap)
-        self.spotlight_card = MemorySpotlightCard(self)
-        self.spotlight_card.view_media_requested.connect(lambda: self._set_type_filter("image"))
-        layout.addWidget(self.spotlight_card)
-
         # Chat Bubble Stream View
         self.chat_stream = ChatBubbleStream(self)
         layout.addWidget(self.chat_stream, stretch=1)
@@ -952,24 +947,6 @@ class GlassDashboardWindow(QMainWindow):
 
         self._filter_messages()
 
-        # Update Memory Spotlight Card
-        if messages:
-            dates = [m.timestamp.date() for m in messages if m.timestamp]
-            date_str = f"{min(dates).strftime('%Y-%m-%d')} 至 {max(dates).strftime('%m-%d')}" if dates else "2024"
-            img_count = sum(1 for m in messages if m.type == MessageType.IMAGE)
-            voice_count = sum(1 for m in messages if m.type == MessageType.VOICE)
-            sub_text = f"收录 {len(messages)} 条时光记忆 · {img_count} 张原图 · {voice_count} 条原声"
-            self.spotlight_card.set_content(
-                title=f"记忆画报 · {self.lbl_chat_title.text()}",
-                subtitle=sub_text,
-                badge=date_str,
-            )
-        else:
-            self.spotlight_card.set_content(
-                title="记忆画报 · 暮色水榭",
-                subtitle="精选记忆 · 高清原图与原声已留存本地",
-                badge="精选留念",
-            )
 
     def _on_worker_failed(self, error_msg: str) -> None:
         self.progress_bar.setValue(0)
@@ -1117,9 +1094,26 @@ class GlassDashboardWindow(QMainWindow):
         end_date = self.date_end.date().toPython()
         return datetime.combine(start_date, time.min), datetime.combine(end_date, time.max)
 
+    @staticmethod
+    def _restorable_output(path: str) -> bool:
+        """Whether a remembered output path is worth restoring.
+
+        A run started by the test suite leaves ``pytest-of-...`` under the OS temp
+        directory, and that path outlives the folder it pointed at. Restoring it
+        would show the user a destination that no longer exists.
+        """
+        candidate = Path(path).expanduser()
+        try:
+            if not candidate.parent.is_dir():
+                return False
+            candidate.resolve().relative_to(Path(tempfile.gettempdir()).resolve())
+        except (ValueError, OSError):
+            return True
+        return False
+
     def _default_export_path(self) -> str:
         saved = str(self._settings.value("outputPath", ""))
-        if saved:
+        if saved and self._restorable_output(saved):
             return saved
         return str(
             default_export_path(f"WeChat_Memory_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
