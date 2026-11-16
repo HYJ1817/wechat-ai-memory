@@ -926,6 +926,10 @@ class ConversationItemWidget(QWidget):
         self.setFixedHeight(64)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # The row must not dictate the rail's width: a long snippet used to push
+        # the list's minimum width past the viewport and clip the right edge.
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 8, 12, 8)
@@ -953,6 +957,11 @@ class ConversationItemWidget(QWidget):
             snippet_display = snippet_display[:20] + "..."
         self.lbl_snippet = QLabel(snippet_display)
         self.lbl_snippet.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-size: 11px; background: transparent;"))
+        # Both labels shrink instead of dictating the rail width; a long snippet
+        # used to widen the whole settings column and clip its right edge.
+        for label in (self.lbl_title, self.lbl_snippet):
+            label.setMinimumWidth(0)
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         mid_col.addWidget(self.lbl_snippet)
         layout.addLayout(mid_col, stretch=1)
 

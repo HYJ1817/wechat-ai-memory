@@ -229,21 +229,19 @@ class GlassDashboardWindow(QMainWindow):
         top_bar = self._build_top_bar()
         root_layout.addLayout(top_bar)
 
-        # ---- 2. Main Workspace (3 columns) ----
+        # ---- 2. Main Workspace: one settings rail, one preview ----
+        # Three columns split the inputs across the outer two and squeezed the
+        # middle; the classic window kept every input in a single scannable column
+        # and gave the rest of the width to the content. Same idea here.
         workspace = QHBoxLayout()
-        workspace.setSpacing(16)
+        workspace.setSpacing(20)
 
-        # Left Column: Control Center
-        self.left_card = self._build_control_card()
-        workspace.addWidget(self.left_card, stretch=0)
+        self.settings_card = self._build_settings_card()
+        self.left_card = self.settings_card  # kept for existing callers
+        workspace.addWidget(self.settings_card, stretch=0)
 
-        # Center Column: Chat Stream Preview
         self.center_card = self._build_chat_card()
         workspace.addWidget(self.center_card, stretch=1)
-
-        # Right Column: Metrics & Storage
-        self.right_card = self._build_metrics_card()
-        workspace.addWidget(self.right_card, stretch=0)
 
         root_layout.addLayout(workspace, stretch=1)
 
@@ -271,6 +269,26 @@ class GlassDashboardWindow(QMainWindow):
             % (native_theme.ink_rgba(35), native_theme.accent_rgba(255))
         )
         status_row.addWidget(self.progress_bar, stretch=1)
+
+        # Media retention lives with the other run-level status: it used to sit in
+        # the settings rail, where it cost the export controls 35px of height.
+        self.lbl_media_lost = QLabel("")
+        self.lbl_media_lost.setStyleSheet("color: #B4560E; font-size: 11px;")
+        self.lbl_media_lost.setToolTip("本地媒体留存")
+        status_row.addWidget(self.lbl_media_lost)
+
+        self.media_bar = QProgressBar()
+        self.media_bar.setTextVisible(False)
+        self.media_bar.setFixedSize(90, 4)
+        self.media_bar.setRange(0, 100)
+        self.media_bar.setValue(100)
+        self.media_bar.setToolTip("本地媒体留存")
+        self.media_bar.setStyleSheet(
+            "QProgressBar { background: %s; border: none; border-radius: 2px; }"
+            "QProgressBar::chunk { background: %s; border-radius: 2px; }"
+            % (native_theme.ink_rgba(40), native_theme.accent_rgba(255))
+        )
+        status_row.addWidget(self.media_bar)
 
         self.status_detail = QLabel("本地处理 · 数据不出机")
         self.status_detail.setStyleSheet(
@@ -333,78 +351,52 @@ class GlassDashboardWindow(QMainWindow):
         # along with Snap, the system menu and Win+arrow.
         return bar
 
-    def _build_control_card(self) -> GlassCard:
-        card = GlassCard(self, corner_radius=24, tint=(255, 255, 255, 26))
-        card.setFixedWidth(350)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 18, 16, 18)
-        layout.setSpacing(12)
+    def _section_header(self, text: str, number: str) -> QWidget:
+        """Numbered section heading, the way the classic sidebar labels its groups."""
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
 
-        # 1. Header Identity & Status
-        hdr_box = QVBoxLayout()
-        hdr_box.setSpacing(4)
-        title_row = QHBoxLayout()
-        title_lbl = QLabel("会话记忆")
-        title_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 245); font-size: 15px; font-weight: bold;"))
-        title_row.addWidget(title_lbl)
-        title_row.addStretch(1)
+        index = QLabel(number)
+        index.setStyleSheet(f"color: {nm.BLURPLE.name()}; font-size: 10px; font-weight: bold;")
+        title = QLabel(text)
+        title.setStyleSheet(
+            native_theme.themed_qss("color: rgba(255, 255, 255, 205); font-size: 12px; font-weight: bold;")
+        )
+        row.addWidget(index)
+        row.addWidget(title)
+        row.addStretch(1)
+        return widget
 
-        self.btn_pick_contact = PillButton("全部", self)
-        self.btn_pick_contact.setFixedHeight(24)
-        self.btn_pick_contact.setStyleSheet(native_theme.themed_qss("font-size: 10px; color: rgba(255, 215, 160, 220); padding: 0 10px;"))
-        self.btn_pick_contact.clicked.connect(self._on_pick_conversation)
-        title_row.addWidget(self.btn_pick_contact)
-        hdr_box.addLayout(title_row)
+    def _field_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setStyleSheet(
+            native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-size: 11px;")
+        )
+        return label
 
-        self.source_desc_lbl = QLabel("本机微信 (未连接)")
-        self.source_desc_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-size: 11px;"))
-        hdr_box.addWidget(self.source_desc_lbl)
-        layout.addLayout(hdr_box)
-
-        # 2. Connection Action Row
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        self.btn_connect = PillButton("连接微信", self, primary=True)
-        self.btn_connect.setFixedHeight(32)
-        self.btn_connect.clicked.connect(self._on_connect_clicked)
-
-        self.btn_open_json = PillButton("导入 JSON", self)
-        self.btn_open_json.setFixedHeight(32)
-        self.btn_open_json.clicked.connect(self._on_open_json)
-
-        btn_row.addWidget(self.btn_connect, stretch=1)
-        btn_row.addWidget(self.btn_open_json, stretch=1)
-        layout.addLayout(btn_row)
-
-        # 3. Live Search Filter
-        self.conv_search_box = nm.SoftLineEdit()
-        self.conv_search_box.setPlaceholderText("搜索联系人或群聊...")
-        self.conv_search_box.textChanged.connect(self._filter_conversations)
-        layout.addWidget(self.conv_search_box)
-
-        # 4. Scrollable Conversation Item List
-        self.conv_scroll = QScrollArea()
-        self.conv_scroll.setWidgetResizable(True)
-        self.conv_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.conv_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # QScrollArea already scrolls per pixel (its scrollbar range is in
-        # pixels); ScrollPerItem is a QAbstractItemView concept and calling
-        # setVerticalScrollMode here would raise AttributeError.
-        self.conv_scroll.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.conv_scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.conv_scroll.viewport().setAutoFillBackground(False)
-        self.conv_scroll.setStyleSheet(native_theme.themed_qss("""
+    def _transparent_scroll(self) -> tuple[QScrollArea, QWidget, QVBoxLayout]:
+        """A frameless, transparent scroll area that does not paint over the card."""
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.Shape.NoFrame)
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        area.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        area.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        area.viewport().setAutoFillBackground(False)
+        area.setStyleSheet(native_theme.themed_qss("""
             QScrollArea { background: transparent; border: none; }
             QScrollArea > QWidget > QWidget { background: transparent; }
             QScrollBar:vertical {
                 border: none;
-                background: rgba(255, 255, 255, 8);
-                width: 4px;
+                background: rgba(255, 255, 255, 16);
+                width: 6px;
                 margin: 0px;
                 border-radius: 2px;
             }
             QScrollBar::handle:vertical {
-                background: rgba(255, 255, 255, 45);
+                background: rgba(255, 255, 255, 95);
                 min-height: 20px;
                 border-radius: 2px;
             }
@@ -413,45 +405,244 @@ class GlassDashboardWindow(QMainWindow):
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """))
-        self.conv_scroll.viewport().setStyleSheet(native_theme.themed_qss("background: transparent; background-color: transparent;"))
+        area.viewport().setStyleSheet(
+            native_theme.themed_qss("background: transparent; background-color: transparent;")
+        )
 
-        self.conv_container = QWidget()
-        self.conv_container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.conv_container.setAutoFillBackground(False)
-        self.conv_container.setStyleSheet(native_theme.themed_qss("background: transparent; background-color: transparent;"))
-        self.conv_vbox = QVBoxLayout(self.conv_container)
+        container = QWidget()
+        container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        container.setAutoFillBackground(False)
+        container.setStyleSheet(
+            native_theme.themed_qss("background: transparent; background-color: transparent;")
+        )
+        inner = QVBoxLayout(container)
+        inner.setContentsMargins(0, 0, 4, 0)
+        inner.setSpacing(0)
+        area.setWidget(container)
+        return area, container, inner
+
+    def _build_settings_card(self) -> GlassCard:
+        """Every input in one rail: 01 数据源 → 02 记忆范围 → 03 归档设置.
+
+        The classic window put all of its inputs in a single column and gave the
+        rest of the width to the content; the export button stayed pinned at the
+        bottom. This is the same arrangement with the neumorphic material, so the
+        preview gets the width instead of a third cramped column.
+        """
+        card = GlassCard(self, corner_radius=24, tint=(255, 255, 255, 26))
+        card.setFixedWidth(372)
+
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(20, 18, 20, 18)
+        outer.setSpacing(14)
+
+        head = QVBoxLayout()
+        head.setSpacing(2)
+        self.source_desc_lbl = QLabel("本机微信 (未连接)")
+        self.source_desc_lbl.setStyleSheet(
+            native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-size: 11px;")
+        )
+        head.addWidget(self.source_desc_lbl)
+        outer.addLayout(head)
+
+        scroll, _container, body = self._transparent_scroll()
+
+        # ---- 01 数据源 ----
+        body.addWidget(self._section_header("数据源", "01"))
+        body.addSpacing(6)
+
+        # Four compact actions in one row: two rows cost 40px the rail does not
+        # have, and the labels are obvious enough to stand alone.
+        source_row = QHBoxLayout()
+        source_row.setSpacing(6)
+        self.btn_connect = PillButton("连接", self, primary=True)
+        self.btn_connect.setToolTip("连接本机微信账户")
+        self.btn_connect.setFixedHeight(30)
+        self.btn_connect.clicked.connect(self._on_connect_clicked)
+        self.btn_open_json = PillButton("导入", self)
+        self.btn_open_json.setToolTip("从 JSON 文件导入聊天记录")
+        self.btn_open_json.setFixedHeight(30)
+        self.btn_open_json.clicked.connect(self._on_open_json)
+        self.btn_read_img = PillButton("原图", self)
+        self.btn_read_img.setFixedHeight(30)
+        self.btn_read_img.setToolTip("解密并恢复图片原图")
+        self.btn_read_img.clicked.connect(self._on_extract_images)
+        self.btn_read_img.setEnabled(False)
+        self.btn_transcribe = PillButton("语音", self)
+        self.btn_transcribe.setFixedHeight(30)
+        self.btn_transcribe.setToolTip("本地转写语音消息")
+        self.btn_transcribe.clicked.connect(self._on_transcribe_voice)
+        self.btn_transcribe.setEnabled(False)
+        for button in (
+            self.btn_connect,
+            self.btn_open_json,
+            self.btn_read_img,
+            self.btn_transcribe,
+        ):
+            # Four buttons across 320px: let them shrink instead of demanding
+            # their text width and widening the whole rail.
+            button.setMinimumWidth(0)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            source_row.addWidget(button, stretch=1)
+        body.addLayout(source_row)
+
+        # ---- 02 记忆范围 ----
+        body.addSpacing(14)
+        range_head = QHBoxLayout()
+        range_head.setSpacing(8)
+        range_head.addWidget(self._section_header("记忆范围", "02"))
+        self.btn_pick_contact = PillButton("全部", self)
+        self.btn_pick_contact.setFixedHeight(24)
+        self.btn_pick_contact.setStyleSheet(
+            native_theme.themed_qss("font-size: 10px; color: rgba(255, 215, 160, 220); padding: 0 10px;")
+        )
+        self.btn_pick_contact.clicked.connect(self._on_pick_conversation)
+        range_head.addWidget(self.btn_pick_contact)
+        body.addLayout(range_head)
+        body.addSpacing(10)
+
+        body.addWidget(self._field_label("联系人 / 群聊"))
+        body.addSpacing(4)
+        self.conv_search_box = nm.SoftLineEdit()
+        self.conv_search_box.setPlaceholderText("搜索联系人或群聊...")
+        self.conv_search_box.textChanged.connect(self._filter_conversations)
+        body.addWidget(self.conv_search_box)
+        body.addSpacing(8)
+
+        self.conv_scroll, self.conv_container, self.conv_vbox = self._transparent_scroll()
+        self.conv_scroll.setMinimumHeight(134)
         self.conv_vbox.setContentsMargins(0, 0, 0, 0)
         self.conv_vbox.setSpacing(6)
         self.conv_vbox.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.conv_scroll.setWidget(self.conv_container)
-        layout.addWidget(self.conv_scroll, stretch=1)
+        body.addWidget(self.conv_scroll)
+        body.addSpacing(12)
 
-        # 5. Bottom Utility Actions
-        bottom_tools = QHBoxLayout()
-        bottom_tools.setSpacing(8)
-        self.btn_read_img = PillButton("解密原图", self)
-        self.btn_read_img.setFixedHeight(28)
-        self.btn_read_img.setStyleSheet(native_theme.themed_qss("font-size: 10px; padding: 0 6px;"))
-        self.btn_read_img.clicked.connect(self._on_extract_images)
-        self.btn_read_img.setEnabled(False)
+        body.addWidget(self._field_label("时间范围"))
+        body.addSpacing(4)
+        date_row = QHBoxLayout()
+        date_row.setSpacing(8)
+        self.date_start = nm.SoftDateEdit()
+        self.date_start.setCalendarPopup(True)
+        self.date_start.setDate(QDate.currentDate().addYears(-1))
+        self.date_start.dateChanged.connect(self._filter_messages)
+        self.date_end = nm.SoftDateEdit()
+        self.date_end.setCalendarPopup(True)
+        self.date_end.setDate(QDate.currentDate())
+        self.date_end.dateChanged.connect(self._filter_messages)
+        sep = QLabel("→")
+        sep.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-weight: bold;"))
+        date_row.addWidget(self.date_start, stretch=1)
+        date_row.addWidget(sep)
+        date_row.addWidget(self.date_end, stretch=1)
+        body.addLayout(date_row)
+        body.addSpacing(16)
 
-        self.btn_transcribe = PillButton("转写语音", self)
-        self.btn_transcribe.setFixedHeight(28)
-        self.btn_transcribe.setStyleSheet(native_theme.themed_qss("font-size: 10px; padding: 0 6px;"))
-        self.btn_transcribe.clicked.connect(self._on_transcribe_voice)
-        self.btn_transcribe.setEnabled(False)
+        body.addSpacing(12)
 
-        bottom_tools.addWidget(self.btn_read_img, stretch=1)
-        bottom_tools.addWidget(self.btn_transcribe, stretch=1)
-        layout.addLayout(bottom_tools)
+        # ---- 03 归档设置 ----
+        body.addSpacing(14)
+        body.addWidget(self._section_header("归档设置", "03"))
+        body.addSpacing(6)
+
+        # Where it goes and who receives it change on every export, so they sit
+        # at the top of the section; the format boxes are usually set once.
+        body.addWidget(self._field_label("输出位置"))
+        body.addSpacing(4)
+        self.output_edit = nm.SoftLineEdit()
+        self.output_edit.setText(self._default_export_path())
+        self.output_edit.setCursorPosition(0)
+        self.output_edit.setToolTip(self.output_edit.text())
+        body.addWidget(self.output_edit)
+
+        body.addSpacing(10)
+        self.scene_bar = SceneDeliveryBar()
+        self.scene_bar.setMinimumWidth(0)
+        self.scene_bar.scene_changed.connect(self._apply_scene_to_controls)
+        self.scene_bar.apply_styles(
+            labels=native_theme.themed_qss("color: rgba(255, 255, 255, 150); font-size: 11px;"),
+        )
+        body.addWidget(self.scene_bar)
+
+        body.addSpacing(6)
+        body.addWidget(self._field_label("导出内容"))
+        body.addSpacing(6)
+
+        check_style = (
+            "QCheckBox { color: %s; font-size: 12px; spacing: 9px; }"
+            "QCheckBox::indicator { width: 15px; height: 15px; border-radius: 4px;"
+            " border: none; background: %s; }"
+            "QCheckBox::indicator:checked { background: %s; }"
+            % (native_theme.ink_rgba(210), nm.BASE.name(), native_theme.accent_rgba(255))
+        )
+        # Short labels: the long ones ("PDF 视觉档案 · 必选") do not fit two per
+        # row in a 330px rail, and the tooltip carries the full meaning.
+        self.check_pdf = QCheckBox("PDF 档案")
+        self.check_pdf.setToolTip("PDF 视觉档案（必选）")
+        self.check_pdf.setChecked(True)
+        self.check_pdf.setEnabled(False)
+        self.check_markdown = QCheckBox("Markdown")
+        self.check_markdown.setToolTip("同时生成可搜索的 Markdown")
+        self.check_markdown.setChecked(True)
+        self.check_json = QCheckBox("JSON")
+        self.check_json.setToolTip("同时生成可再导入的规范化 JSON")
+        self.check_json.setChecked(True)
+        self.switch_image_pages = QCheckBox("图片独立页")
+        self.switch_image_pages.setToolTip("高清图片独立成页")
+        self.switch_image_pages.setChecked(True)
+        self.switch_keep_png = QCheckBox("保留渲染 PNG")
+        self.switch_keep_png.setChecked(False)
+        for box in (
+            self.check_pdf,
+            self.check_markdown,
+            self.check_json,
+            self.switch_image_pages,
+            self.switch_keep_png,
+        ):
+            box.setStyleSheet(check_style)
+
+        check_row1 = QHBoxLayout()
+        check_row1.setSpacing(10)
+        check_row1.addWidget(self.check_pdf, stretch=1)
+        check_row1.addWidget(self.check_markdown, stretch=1)
+        check_row1.addWidget(self.check_json, stretch=1)
+        check_row2 = QHBoxLayout()
+        check_row2.setSpacing(10)
+        check_row2.addWidget(self.switch_image_pages, stretch=1)
+        check_row2.addWidget(self.switch_keep_png, stretch=1)
+        body.addLayout(check_row1)
+        body.addSpacing(2)
+        body.addLayout(check_row2)
+        self.switch_image_pages.toggled.connect(self._refresh_export_estimate)
+        self.switch_keep_png.toggled.connect(self._refresh_export_estimate)
+
+        body.addStretch(1)
+        outer.addWidget(scroll, stretch=1)
+
+        # One line instead of a boxed panel: the estimate is a caption for the
+        # button, and the 40px it saves lets the conversation list show two whole
+        # rows instead of one and a half.
+        self.lbl_export_est = QLabel("请先连接微信或加载会话数据")
+        self.lbl_export_est.setWordWrap(True)
+        self.lbl_export_est.setStyleSheet(
+            native_theme.themed_qss("color: rgba(255, 255, 255, 170); font-size: 11px;")
+        )
+        outer.addWidget(self.lbl_export_est)
+
+        # Pinned at the bottom of the rail, like the classic window's action bar.
+        self.btn_export = PillButton("导出记忆档案", self, primary=True)
+        self.btn_export.setFixedHeight(46)
+        self.btn_export.clicked.connect(self._on_export_clicked)
+        outer.addWidget(self.btn_export)
 
         return card
 
     def _build_chat_card(self) -> GlassCard:
         card = GlassCard(self, corner_radius=24, tint=(255, 255, 255, 26))
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(22, 18, 22, 18)
-        layout.setSpacing(12)
+        # 24px padding: the preview is the widest surface in the window and the
+        # old 22/18 made the stream look pressed against the card edge.
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
         # Header Row
         header = QHBoxLayout()
@@ -502,166 +693,17 @@ class GlassDashboardWindow(QMainWindow):
 
         return card
 
-    def _build_metrics_card(self) -> GlassCard:
-        card = GlassCard(self, corner_radius=24, tint=(255, 255, 255, 26))
-        card.setFixedWidth(330)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(14)
-
-        # Top Title
-        title_lbl = QLabel("记忆洞察与档案导出")
-        title_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 175, 95, 240); font-size: 13px; font-weight: bold;"))
-        layout.addWidget(title_lbl)
-
-        # 1. 4-Grid Micro Stat Cards
-        stats_grid1 = QHBoxLayout()
-        stats_grid1.setSpacing(8)
-        self.stat_msgs = self._build_mini_stat("0", "条消息")
-        self.stat_imgs = self._build_mini_stat("0", "张图片")
-        stats_grid1.addWidget(self.stat_msgs)
-        stats_grid1.addWidget(self.stat_imgs)
-        layout.addLayout(stats_grid1)
-
-        stats_grid2 = QHBoxLayout()
-        stats_grid2.setSpacing(8)
-        self.stat_days = self._build_mini_stat("0", "活跃天数")
-        self.stat_words = self._build_mini_stat("0", "字数规模")
-        stats_grid2.addWidget(self.stat_days)
-        stats_grid2.addWidget(self.stat_words)
-        layout.addLayout(stats_grid2)
-
-        # 2. Local media retention
-        retention_row = QHBoxLayout()
-        retention_row.setSpacing(6)
-        retention_caption = QLabel("本地媒体留存")
-        retention_caption.setStyleSheet(
-            native_theme.themed_qss("color: rgba(255, 255, 255, 170); font-size: 11px;")
-        )
-        self.lbl_media_lost = QLabel("")
-        self.lbl_media_lost.setStyleSheet("color: #B4560E; font-size: 11px;")
-        retention_row.addWidget(retention_caption)
-        retention_row.addStretch(1)
-        retention_row.addWidget(self.lbl_media_lost)
-        layout.addLayout(retention_row)
-
-        self.media_bar = QProgressBar()
-        self.media_bar.setTextVisible(False)
-        self.media_bar.setFixedHeight(5)
-        self.media_bar.setRange(0, 100)
-        self.media_bar.setValue(100)
-        self.media_bar.setStyleSheet(
-            "QProgressBar { background: %s; border: none; border-radius: 2px; }"
-            "QProgressBar::chunk { background: %s; border-radius: 2px; }"
-            % (native_theme.ink_rgba(40), native_theme.accent_rgba(255))
-        )
-        layout.addWidget(self.media_bar)
-
-        # 3. Date Filter Range
-        date_section = QLabel("时间范围")
-        date_section.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 200); font-size: 11px; font-weight: bold; margin-top: 4px;"))
-        layout.addWidget(date_section)
-
-        date_row = QHBoxLayout()
-        date_row.setSpacing(6)
-        self.date_start = nm.SoftDateEdit()
-        self.date_start.setCalendarPopup(True)
-        self.date_start.setDate(QDate.currentDate().addYears(-1))
-        self.date_start.dateChanged.connect(self._filter_messages)
-
-        self.date_end = nm.SoftDateEdit()
-        self.date_end.setCalendarPopup(True)
-        self.date_end.setDate(QDate.currentDate())
-        self.date_end.dateChanged.connect(self._filter_messages)
-
-        date_row.addWidget(self.date_start, stretch=1)
-        sep = QLabel("→")
-        sep.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-weight: bold;"))
-        date_row.addWidget(sep)
-        date_row.addWidget(self.date_end, stretch=1)
-        layout.addLayout(date_row)
-
-        # 4. Export contents -- checkboxes, all visible (no collapsed section)
-        export_section = QLabel("导出内容")
-        export_section.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 200); font-size: 11px; font-weight: bold; margin-top: 4px;"))
-        layout.addWidget(export_section)
-
-        check_style = (
-            "QCheckBox { color: %s; font-size: 12px; spacing: 9px; }"
-            "QCheckBox::indicator { width: 15px; height: 15px; border-radius: 4px;"
-            " border: none; background: %s; }"
-            "QCheckBox::indicator:checked { background: %s; }"
-            % (native_theme.ink_rgba(210), nm.BASE.name(),
-               native_theme.accent_rgba(255))
-        )
-
-        self.check_pdf = QCheckBox("PDF 视觉档案 · 必选")
-        self.check_pdf.setChecked(True)
-        self.check_pdf.setEnabled(False)
-        self.check_markdown = QCheckBox("Markdown · 可搜索")
-        self.check_markdown.setChecked(True)
-        self.check_json = QCheckBox("JSON · 可再导入")
-        self.check_json.setChecked(True)
-        self.switch_image_pages = QCheckBox("高清图片独立成页")
-        self.switch_image_pages.setChecked(True)
-        self.switch_keep_png = QCheckBox("保留渲染 PNG")
-        self.switch_keep_png.setChecked(False)
-
-        for box in (self.check_pdf, self.check_markdown, self.check_json,
-                    self.switch_image_pages, self.switch_keep_png):
-            box.setStyleSheet(check_style)
-            layout.addWidget(box)
-
-        self.switch_image_pages.toggled.connect(self._refresh_export_estimate)
-        self.switch_keep_png.toggled.connect(self._refresh_export_estimate)
-
-        # 5. Output location
-        output_section = QLabel("输出位置")
-        output_section.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 200); font-size: 11px; font-weight: bold; margin-top: 4px;"))
-        layout.addWidget(output_section)
-
-        self.output_edit = nm.SoftLineEdit()
-        self.output_edit.setText(self._default_export_path())
-        layout.addWidget(self.output_edit)
-
-        # 6. Export estimate
-        self.estimate_box = SoftPanel(radius=12, strength=85)
-        est_layout = QVBoxLayout(self.estimate_box)
-        est_layout.setContentsMargins(10, 8, 10, 8)
-        est_layout.setSpacing(3)
-        est_caption = QLabel("导出预估")
-        est_caption.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 150); font-size: 11px; border: none;"))
-        self.lbl_export_est = QLabel("请先连接微信或加载会话数据")
-        self.lbl_export_est.setWordWrap(True)
-        self.lbl_export_est.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 230); font-size: 12px; border: none;"))
-        est_layout.addWidget(est_caption)
-        est_layout.addWidget(self.lbl_export_est)
-        layout.addWidget(self.estimate_box)
-
-        self.scene_bar = SceneDeliveryBar()
-        self.scene_bar.scene_changed.connect(self._apply_scene_to_controls)
-        self.scene_bar.apply_styles(
-            labels=native_theme.themed_qss("color: rgba(255, 255, 255, 150); font-size: 11px;"),
-        )
-        layout.addWidget(self.scene_bar)
-
-        layout.addStretch(1)
-
-        # 7. Export CTA Button
-        self.btn_export = PillButton("导出记忆档案", self, primary=True)
-        self.btn_export.setFixedHeight(46)
-        self.btn_export.clicked.connect(self._on_export_clicked)
-        layout.addWidget(self.btn_export)
-
-        return card
-
     # --------------------------------------------------------------------------
     # Widget Helper Builders
     # --------------------------------------------------------------------------
     def _build_mini_stat(self, value: str, label: str) -> QWidget:
         box = SoftPanel(radius=14, strength=85)
+        # Four cells across a 330px rail: none of them may demand a fixed width,
+        # or the settings column overflows its viewport and gets clipped.
+        box.setMinimumWidth(0)
+        box.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         lay = QVBoxLayout(box)
-        lay.setContentsMargins(6, 8, 6, 8)
+        lay.setContentsMargins(4, 7, 4, 7)
         lay.setSpacing(2)
         val_lbl = QLabel(value)
         val_lbl.setObjectName("statVal")
@@ -670,6 +712,9 @@ class GlassDashboardWindow(QMainWindow):
         cap_lbl = QLabel(label)
         cap_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cap_lbl.setStyleSheet(native_theme.themed_qss("color: rgba(255, 255, 255, 140); font-size: 10px; border: none;"))
+        for lbl in (val_lbl, cap_lbl):
+            lbl.setMinimumWidth(0)
+            lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         lay.addWidget(val_lbl)
         lay.addWidget(cap_lbl)
         return box
@@ -976,15 +1021,13 @@ class GlassDashboardWindow(QMainWindow):
 
         self._filtered_messages = filtered
 
-        # Update 4-grid stats
-        self.stat_msgs.findChild(QLabel, "statVal").setText(f"{len(filtered):,}")
-        self.stat_imgs.findChild(QLabel, "statVal").setText(f"{img_count:,}")
-        self.stat_days.findChild(QLabel, "statVal").setText(f"{len(active_days):,}")
-        self.stat_words.findChild(QLabel, "statVal").setText(f"~{total_chars:,}" if total_chars < 10000 else f"~{total_chars/1000:.1f}k")
-
         # Update chat stream
         self.chat_stream.set_messages(filtered)
-        self.lbl_chat_sub.setText(f"筛选出 {len(filtered):,} 条记忆 · 跨越 {len(active_days)} 个活跃日")
+        chars_text = f"~{total_chars:,}" if total_chars < 10000 else f"~{total_chars / 1000:.1f}k"
+        self.lbl_chat_sub.setText(
+            f"筛选出 {len(filtered):,} 条记忆 · {img_count:,} 张图片 · "
+            f"跨越 {len(active_days)} 个活跃日 · {chars_text} 字"
+        )
 
         # Update Gauge & Estimate
         self._update_storage_gauge(len(filtered), img_count)
@@ -1000,7 +1043,7 @@ class GlassDashboardWindow(QMainWindow):
             size_text = f"{est_mb:.0f} MB"
 
         self.lbl_export_est.setText(
-            f"{est_pages:,} 页 · 约 {est_minutes:.1f} 分钟\n约 {size_text} · 本地完成，不上传"
+            f"导出预估：{est_pages:,} 页 · 约 {size_text} · 约 {est_minutes:.1f} 分钟 · 本地完成"
         )
         self._update_media_retention(img_count)
 

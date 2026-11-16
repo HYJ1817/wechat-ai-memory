@@ -97,8 +97,10 @@ def test_cli_scene_exports_delivers_and_records(tmp_path, capsys):
     assert (job_dir / "manifest.json").is_file()
     assert (job_dir / "state.json").is_file()
     assert list((job_dir / "files").glob("*.pdf"))
-    assert (out_dir / "2026-11-15 ECO 项目讨论群" / "ECO 项目讨论群.pdf").is_file()
-    assert (out_dir / "2026-11-15 ECO 项目讨论群" / "给 Agent 的提示词.txt").is_file()
+    delivered = next(out_dir.iterdir())
+    assert delivered.name.endswith("ECO 项目讨论群")
+    assert (delivered / "ECO 项目讨论群.pdf").is_file()
+    assert (delivered / "给 Agent 的提示词.txt").is_file()
 
     assert main(["--list-jobs", "--jobs-dir", str(jobs_dir)]) == 0
     listed = capsys.readouterr().out
@@ -186,8 +188,10 @@ def test_cli_scene_exports_delivers_and_records(tmp_path, capsys):
     assert (job_dir / "manifest.json").is_file()
     assert (job_dir / "state.json").is_file()
     assert list((job_dir / "files").glob("*.pdf"))
-    assert (out_dir / "2026-11-15 ECO 项目讨论群" / "ECO 项目讨论群.pdf").is_file()
-    assert (out_dir / "2026-11-15 ECO 项目讨论群" / "给 Agent 的提示词.txt").is_file()
+    delivered = next(out_dir.iterdir())
+    assert delivered.name.endswith("ECO 项目讨论群")
+    assert (delivered / "ECO 项目讨论群.pdf").is_file()
+    assert (delivered / "给 Agent 的提示词.txt").is_file()
 
     assert main(["--list-jobs", "--jobs-dir", str(jobs_dir)]) == 0
     listed = capsys.readouterr().out

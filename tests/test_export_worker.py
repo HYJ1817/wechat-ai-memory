@@ -74,7 +74,9 @@ def test_worker_delivers_to_the_chosen_target(tmp_path):
     assert failed == []
     assert worker.run_result.delivery is not None
     assert worker.run_result.job.state.status is JobStatus.DELIVERED
-    assert (out / "2026-11-15 ECO 项目讨论群" / "ECO 项目讨论群.pdf").is_file()
+    delivered = next(out.iterdir())
+    assert delivered.name.endswith("ECO 项目讨论群")
+    assert (delivered / "ECO 项目讨论群.pdf").is_file()
 
 
 def test_worker_reports_an_invalid_range_without_creating_a_job(tmp_path):

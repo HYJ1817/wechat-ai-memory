@@ -76,7 +76,8 @@ def test_records_a_job_and_delivers_to_a_folder(tmp_path):
     assert result.job is not None
     assert result.job.directory.parent == store.ready_dir
     assert result.job.state.status is JobStatus.DELIVERED
-    assert result.job.state.destination == str(out / "2026-11-15 ECO 项目讨论群")
+    stamp = result.job.manifest.created_at.strftime("%Y-%m-%d")
+    assert result.job.state.destination == str(out / f"{stamp} ECO 项目讨论群")
 
     manifest = result.job.manifest
     assert manifest.message_count == 8

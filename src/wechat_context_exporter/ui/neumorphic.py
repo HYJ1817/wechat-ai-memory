@@ -27,6 +27,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QComboBox,
+    QSizePolicy,
     QDateEdit,
     QGraphicsDropShadowEffect,
     QLineEdit,
@@ -333,6 +334,11 @@ class SoftComboBox(QComboBox):
         # here would build a top-level popup window that outlives the app and
         # crashes at shutdown.
         self.setStyleSheet(input_qss(radius=radius, padding="5px 10px", popup=True))
+        # Long items ("投递到 Obsidian") would otherwise force a minimum width the
+        # settings rail cannot give, and the scroll content overflows sideways.
+        self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(8)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -348,6 +354,11 @@ class SoftDateEdit(QDateEdit):
         self._radius = radius
         self.setStyleSheet(input_qss(radius=radius, padding="6px 12px"))
         self.setFrame(False)
+        # QDateEdit's size hint is ~176px once the calendar button is counted; a
+        # pair of them then overflows a 330px settings rail. An explicit minimum
+        # overrides that hint, and stretch still divides the row evenly.
+        self.setMinimumWidth(120)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
